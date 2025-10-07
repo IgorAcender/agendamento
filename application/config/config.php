@@ -2,18 +2,6 @@
 
 /*
 |--------------------------------------------------------------------------
-| Easy!Appointments - Internal Configuration
-|--------------------------------------------------------------------------
-|
-| Declare some of the global config values of Easy!Appointments.
-|
-*/
-$config['version'] = '1.4.3'; // This must be changed manually.
-$config['release_label'] = ''; // Leave empty for no title or add Alpha, Beta etc ...
-$config['debug'] = Config::DEBUG_MODE;
-
-/*
-|--------------------------------------------------------------------------
 | Base Site URL
 |--------------------------------------------------------------------------
 |
@@ -26,7 +14,24 @@ $config['debug'] = Config::DEBUG_MODE;
 | path to your installation.
 |
 */
-$config['base_url'] = Config::BASE_URL;
+
+$protocol =
+    (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ||
+    (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) ||
+    (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+        ? 'https://'
+        : 'http://';
+
+$domain = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+$request_uri = dirname($_SERVER['SCRIPT_NAME'] ?? 'index.php');
+
+if ($request_uri === '.')
+{
+    $request_uri = '';
+}
+
+$config['base_url'] = rtrim(! is_cli() ? $protocol . $domain . $request_uri : Config::BASE_URL, '/');
 
 /*
 |--------------------------------------------------------------------------
@@ -49,7 +54,7 @@ $config['index_page'] = 'index.php';
 | URI string.  The default setting of 'AUTO' works for most servers.
 | If your links do not seem to work, try one of the other delicious flavors:
 |
-| 'AUTO'			Default - auto detects
+| 'AUTO'			Default - auto-detects
 | 'PATH_INFO'		Uses the PATH_INFO
 | 'QUERY_STRING'	Uses the QUERY_STRING
 | 'REQUEST_URI'		Uses the REQUEST_URI
@@ -83,41 +88,58 @@ $config['url_suffix'] = '';
 */
 
 $languages = [
+    'sq' => 'albanian',
     'ar' => 'arabic',
+    'bs' => 'bosnian',
     'bu' => 'bulgarian',
     'ca' => 'catalan',
-    'zh' => 'chinese',
     'cs' => 'czech',
     'da' => 'danish',
-    'nl' => 'dutch',
-    'en' => 'english',
-    'fi' => 'finnish',
-    'fr' => 'french',
     'de' => 'german',
     'el' => 'greek',
+    'en' => 'english',
+    'es' => 'spanish',
+    'et' => 'estonian',
+    'fa' => 'persian',
+    'fi' => 'finnish',
+    'fr' => 'french',
     'he' => 'hebrew',
     'hi' => 'hindi',
+    'hr' => 'croatian',
     'hu' => 'hungarian',
     'it' => 'italian',
     'ja' => 'japanese',
-    'fa' => 'persian',
     'lb' => 'luxembourgish',
+    'lt' => 'lithuanian',
+    'lv' => 'latvian',
     'mr' => 'marathi',
+    'nl' => 'dutch',
+    'no' => 'norwegian',
     'pl' => 'polish',
     'pt' => 'portuguese',
     'ro' => 'romanian',
+    'rs' => 'serbian',
     'ru' => 'russian',
     'sk' => 'slovak',
-    'es' => 'spanish',
+    'sl' => 'slovenian',
     'sv' => 'swedish',
+    'th' => 'thai',
     'tr' => 'turkish',
+    'zh' => 'chinese',
+    'uk' => 'ukrainian',
 ];
+
+$config['language_codes'] = $languages;
 
 $language_code = isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ? substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, 2) : 'en';
 
-$config['language'] = isset($_SERVER['HTTP_ACCEPT_LANGUAGE'], $languages[$language_code])
-    ? $languages[$language_code]
-    : Config::LANGUAGE;
+$config['language'] =
+    $_GET['language'] ??
+    (isset($_SERVER['HTTP_ACCEPT_LANGUAGE'], $languages[$language_code])
+        ? $languages[$language_code]
+        : Config::LANGUAGE);
+
+$config['language_code'] = array_search($config['language'], $languages) ?: 'en';
 
 /*
 |--------------------------------------------------------------------------
@@ -130,14 +152,18 @@ $config['language'] = isset($_SERVER['HTTP_ACCEPT_LANGUAGE'], $languages[$langua
 |
 */
 $config['available_languages'] = [
+    'albanian',
     'arabic',
+    'bosnian',
     'bulgarian',
     'catalan',
     'chinese',
+    'croatian',
     'czech',
     'danish',
     'dutch',
     'english',
+    'estonian',
     'finnish',
     'french',
     'german',
@@ -147,17 +173,26 @@ $config['available_languages'] = [
     'hungarian',
     'italian',
     'japanese',
+    'latvian',
+    'lithuanian',
     'luxembourgish',
     'marathi',
+    'norwegian',
     'persian',
     'polish',
     'portuguese',
     'portuguese-br',
     'romanian',
     'russian',
+    'serbian',
     'slovak',
+    'slovenian',
     'spanish',
-    'turkish'
+    'swedish',
+    'thai',
+    'traditional-chinese',
+    'turkish',
+    'ukrainian',
 ];
 
 /*
@@ -182,7 +217,6 @@ $config['charset'] = 'UTF-8';
 */
 $config['enable_hooks'] = TRUE;
 
-
 /*
 |--------------------------------------------------------------------------
 | Class Extension Prefix
@@ -197,7 +231,6 @@ $config['enable_hooks'] = TRUE;
 */
 $config['subclass_prefix'] = 'EA_';
 
-
 /*
 |--------------------------------------------------------------------------
 | Allowed URL Characters
@@ -208,7 +241,7 @@ $config['subclass_prefix'] = 'EA_';
 | characters they will get a warning message.
 |
 | As a security measure you are STRONGLY encouraged to restrict URLs to
-| as few characters as possible.  By default only these are allowed: a-z 0-9~%.:_-
+| as few characters as possible.  By default, only these are allowed: a-z 0-9~%.:_-
 |
 | Leave blank to allow all characters -- but only if you are insane.
 |
@@ -216,7 +249,6 @@ $config['subclass_prefix'] = 'EA_';
 |
 */
 $config['permitted_uri_chars'] = 'a-z 0-9~%.:_\-';
-
 
 /*
 |--------------------------------------------------------------------------
@@ -306,18 +338,6 @@ $config['cache_path'] = __DIR__ . '/../../storage/cache/';
 
 /*
 |--------------------------------------------------------------------------
-| Cache Busting Token
-|--------------------------------------------------------------------------
-|
-| This token will be appending to asset URLs in order to invalidate the browser
-| cache and enforce end clients to fetch new files. Update the token with each
-| new release.
-|
-*/
-$config['cache_busting_token'] = '6398SW';
-
-/*
-|--------------------------------------------------------------------------
 | Encryption Key
 |--------------------------------------------------------------------------
 |
@@ -351,7 +371,7 @@ $config['sess_expiration'] = 7200;
 $config['sess_save_path'] = __DIR__ . '/../../storage/sessions';
 $config['sess_match_ip'] = FALSE;
 $config['sess_time_to_update'] = 300;
-$config['sess_regenerate_destroy'] = FALSE;
+$config['sess_regenerate_destroy'] = TRUE;
 
 /*
 |--------------------------------------------------------------------------
@@ -364,21 +384,10 @@ $config['sess_regenerate_destroy'] = FALSE;
 | 'cookie_secure' =  Cookies will only be set if a secure HTTPS connection exists.
 |
 */
-$config['cookie_prefix'] = "";
-$config['cookie_domain'] = "";
-$config['cookie_path'] = "/";
+$config['cookie_prefix'] = '';
+$config['cookie_domain'] = '';
+$config['cookie_path'] = '/';
 $config['cookie_secure'] = strpos($config['base_url'], 'https') !== FALSE;
-
-/*
-|--------------------------------------------------------------------------
-| Global XSS Filtering
-|--------------------------------------------------------------------------
-|
-| Determines whether the XSS filter is always active when GET, POST or
-| COOKIE data is encountered
-|
-*/
-$config['global_xss_filtering'] = TRUE;
 
 /*
 |--------------------------------------------------------------------------
@@ -393,10 +402,10 @@ $config['global_xss_filtering'] = TRUE;
 | 'csrf_expire' = The number in seconds the token should expire.
 */
 $config['csrf_protection'] = TRUE;
-$config['csrf_token_name'] = 'csrfToken';
-$config['csrf_cookie_name'] = 'csrfCookie';
+$config['csrf_token_name'] = 'csrf_token';
+$config['csrf_cookie_name'] = 'csrf_cookie';
 $config['csrf_expire'] = 7200;
-$config['csrf_exclude_uris'] = ['api/v1/.*'];
+$config['csrf_exclude_uris'] = ['api/v1/.*', 'booking/.*', 'booking_cancellation/.*', 'booking_confirmation/.*'];
 
 /*
 |--------------------------------------------------------------------------
@@ -430,7 +439,6 @@ $config['compress_output'] = FALSE;
 */
 $config['time_reference'] = 'local';
 
-
 /*
 |--------------------------------------------------------------------------
 | Rewrite PHP Short Tags
@@ -442,7 +450,6 @@ $config['time_reference'] = 'local';
 |
 */
 $config['rewrite_short_tags'] = FALSE;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -462,12 +469,11 @@ $config['proxy_ips'] = '';
 | Rate Limiting
 |--------------------------------------------------------------------------
 |
-| Toggle the rate limiting feature in your application. Using rate limiting 
-| will control the number of requests a client can sent to the app. 
+| Toggle the rate limiting feature in your application. Using rate limiting
+| will control the number of requests a client can send to the app.
 |
 */
 $config['rate_limiting'] = TRUE;
-
 
 /* End of file config.php */
 /* Location: ./application/config/config.php */
