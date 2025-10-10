@@ -20,6 +20,8 @@ App.Pages.Booking = (function () {
     const $selectDate = $('#select-date');
     const $selectService = $('#select-service');
     const $selectProvider = $('#select-provider');
+    const $providerPhoto = $('#provider-photo');
+    const $providerPhotoImage = $('#provider-photo-image');
     const $selectTimezone = $('#select-timezone');
     const $firstName = $('#first-name');
     const $lastName = $('#last-name');
@@ -59,6 +61,31 @@ App.Pages.Booking = (function () {
      */
     function detectDatepickerMonthChangeStep(previousDateTimeMoment, nextDateTimeMoment) {
         return previousDateTimeMoment.isAfter(nextDateTimeMoment) ? -1 : 1;
+    }
+
+    function updateProviderPhotoDisplay(providerId) {
+        if (!providerId || providerId === 'any-provider') {
+            $providerPhoto.prop('hidden', true);
+            $providerPhotoImage.attr('src', '#').attr('alt', lang('provider'));
+
+            return;
+        }
+
+        const provider = vars('available_providers').find(
+            (availableProvider) => Number(availableProvider.id) === Number(providerId),
+        );
+
+        if (!provider || !provider.photo) {
+            $providerPhoto.prop('hidden', true);
+            $providerPhotoImage.attr('src', '#').attr('alt', lang('provider'));
+
+            return;
+        }
+
+        $providerPhotoImage
+            .attr('src', App.Utils.Url.baseUrl(provider.photo))
+            .attr('alt', `${provider.first_name} ${provider.last_name}`.trim());
+        $providerPhoto.prop('hidden', false);
     }
 
     /**
@@ -267,6 +294,8 @@ App.Pages.Booking = (function () {
             prefillFromQueryParam('#city', 'city');
             prefillFromQueryParam('#zip-code', 'zip');
         }
+
+        updateProviderPhotoDisplay($selectProvider.val());
     }
 
     function prefillFromQueryParam(field, param) {
@@ -354,6 +383,8 @@ App.Pages.Booking = (function () {
             );
 
             App.Pages.Booking.updateConfirmFrame();
+
+            updateProviderPhotoDisplay($target.val());
         });
 
         /**
@@ -405,6 +436,8 @@ App.Pages.Booking = (function () {
             App.Pages.Booking.updateConfirmFrame();
 
             App.Pages.Booking.updateServiceDescription(serviceId);
+
+            updateProviderPhotoDisplay($selectProvider.val());
         });
 
         /**
@@ -868,6 +901,7 @@ App.Pages.Booking = (function () {
             // Select Service & Provider
             $selectService.val(appointment.id_services).trigger('change');
             $selectProvider.val(appointment.id_users_provider);
+            updateProviderPhotoDisplay(appointment.id_users_provider);
 
             // Set Appointment Date
             const startMoment = moment(appointment.start_datetime);

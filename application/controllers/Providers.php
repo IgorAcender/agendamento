@@ -25,6 +25,7 @@ class Providers extends EA_Controller
         'first_name',
         'last_name',
         'email',
+        'mobile_number',
         'alt_number',
         'phone_number',
         'address',
@@ -36,6 +37,7 @@ class Providers extends EA_Controller
         'language',
         'is_private',
         'ldap_dn',
+        'photo',
         'id_roles',
         'settings',
         'services',
@@ -43,6 +45,7 @@ class Providers extends EA_Controller
 
     public array $optional_provider_fields = [
         'services' => [],
+        'photo' => null,
     ];
 
     public array $allowed_provider_setting_fields = [
@@ -171,7 +174,11 @@ class Providers extends EA_Controller
                 abort(403, 'Forbidden');
             }
 
-            $provider = request('provider');
+            $provider = $this->decode_provider_payload(request('provider'));
+
+            $remove_photo = !empty($provider['remove_photo']);
+
+            unset($provider['remove_photo']);
 
             $this->providers_model->only($provider, $this->allowed_provider_fields);
 
@@ -180,6 +187,8 @@ class Providers extends EA_Controller
             $this->providers_model->optional($provider, $this->optional_provider_fields);
 
             $this->providers_model->optional($provider['settings'], $this->optional_provider_setting_fields);
+
+            $this->handle_photo_upload($provider, $remove_photo);
 
             $provider_id = $this->providers_model->save($provider);
 
@@ -226,7 +235,17 @@ class Providers extends EA_Controller
                 abort(403, 'Forbidden');
             }
 
-            $provider = request('provider');
+            $provider = $this->decode_provider_payload(request('provider'));
+
+            $remove_photo = !empty($provider['remove_photo']);
+
+            $existing_provider = null;
+
+            if (!empty($provider['id'])) {
+                $existing_provider = $this->providers_model->find($provider['id']);
+            }
+
+            unset($provider['remove_photo']);
 
             $this->providers_model->only($provider, $this->allowed_provider_fields);
 
@@ -235,6 +254,8 @@ class Providers extends EA_Controller
             $this->providers_model->optional($provider, $this->optional_provider_fields);
 
             $this->providers_model->optional($provider['settings'], $this->optional_provider_setting_fields);
+
+            $this->handle_photo_upload($provider, $remove_photo, $existing_provider);
 
             $provider_id = $this->providers_model->save($provider);
 
@@ -265,6 +286,8 @@ class Providers extends EA_Controller
 
             $provider = $this->providers_model->find($provider_id);
 
+            $this->delete_photo_file($provider['photo'] ?? null);
+
             $this->providers_model->delete($provider_id);
 
             $this->webhooks_client->trigger(WEBHOOK_PROVIDER_DELETE, $provider);
@@ -274,6 +297,87 @@ class Providers extends EA_Controller
             ]);
         } catch (Throwable $e) {
             json_exception($e);
+        }
+    }
+
+    private function decode_provider_payload(mixed $payload): array
+    {
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (is_string($payload)) {
+            $decoded = json_decode($payload, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+                throw new InvalidArgumentException('Invalid provider payload.');
+            }
+
+            return $decoded;
+        }
+
+        return [];
+    }
+
+    private function handle_photo_upload(array &$provider, bool $remove_photo, ?array $original_provider = null): void
+    {
+        $existing_photo = $original_provider['photo'] ?? null;
+
+        if (!empty($_FILES['photo']['name'])) {
+            $upload_path = FCPATH . 'storage/uploads/providers';
+
+            if (!is_dir($upload_path) && !mkdir($upload_path, 0775, true) && !is_dir($upload_path)) {
+                throw new RuntimeException('Unable to create providers upload directory.');
+            }
+
+            $config = [
+                'upload_path' => $upload_path,
+                'allowed_types' => 'gif|jpg|jpeg|png|webp',
+                'max_size' => 2048,
+                'encrypt_name' => true,
+            ];
+
+            $this->load->library('upload');
+
+            $this->upload->initialize($config);
+
+            if (!$this->upload->do_upload('photo')) {
+                throw new RuntimeException(trim(strip_tags($this->upload->display_errors('', ''))));
+            }
+
+            $data = $this->upload->data();
+
+            $provider['photo'] = 'storage/uploads/providers/' . $data['file_name'];
+
+            if ($existing_photo && $existing_photo !== $provider['photo']) {
+                $this->delete_photo_file($existing_photo);
+            }
+
+            return;
+        }
+
+        if ($remove_photo && $existing_photo) {
+            $this->delete_photo_file($existing_photo);
+            $provider['photo'] = null;
+
+            return;
+        }
+
+        if ($existing_photo !== null) {
+            $provider['photo'] = $existing_photo;
+        }
+    }
+
+    private function delete_photo_file(?string $path): void
+    {
+        if (empty($path)) {
+            return;
+        }
+
+        $full_path = FCPATH . ltrim($path, '/');
+
+        if (is_file($full_path)) {
+            @unlink($full_path);
         }
     }
 }

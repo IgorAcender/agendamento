@@ -17,6 +17,9 @@
 App.Pages.Providers = (function () {
     const $providers = $('#providers');
     const $id = $('#id');
+    const $photo = $('#photo');
+    const $photoPreview = $('#photo-preview');
+    const $removePhoto = $('#remove-photo');
     const $firstName = $('#first-name');
     const $lastName = $('#last-name');
     const $email = $('#email');
@@ -40,6 +43,8 @@ App.Pages.Providers = (function () {
     let filterResults = {};
     let filterLimit = 20;
     let workingPlanManager;
+    let removingPhoto = false;
+    let hasExistingPhoto = false;
 
     /**
      * Add the page event listeners.
@@ -103,6 +108,7 @@ App.Pages.Providers = (function () {
             const companyWorkingPlan = JSON.parse(vars('company_working_plan'));
             workingPlanManager.setup(companyWorkingPlan);
             workingPlanManager.timepickers(false);
+            updatePhotoControls();
         });
 
         /**
@@ -124,6 +130,7 @@ App.Pages.Providers = (function () {
                 .prop('disabled', false);
             $('#providers input:checkbox').prop('disabled', false);
             workingPlanManager.timepickers(false);
+            updatePhotoControls();
         });
 
         /**
@@ -201,7 +208,23 @@ App.Pages.Providers = (function () {
                 return;
             }
 
-            App.Pages.Providers.save(provider);
+            const formData = new FormData();
+
+            formData.append('csrf_token', vars('csrf_token'));
+
+            provider.remove_photo = removingPhoto ? 1 : 0;
+
+            formData.append('provider', JSON.stringify(provider));
+
+            delete provider.remove_photo;
+
+            const photoFile = $photo[0]?.files[0];
+
+            if (photoFile) {
+                formData.append('photo', photoFile);
+            }
+
+            App.Pages.Providers.save(formData, provider.id);
         });
 
         /**
@@ -228,6 +251,33 @@ App.Pages.Providers = (function () {
             workingPlanManager.setup(companyWorkingPlan);
             workingPlanManager.timepickers(false);
         });
+
+        $providers.on('change', '#photo', (event) => {
+            const file = event.target.files[0];
+
+            if (!file) {
+                updatePhotoControls();
+
+                return;
+            }
+
+            App.Utils.File.toBase64(file).then((base64) => {
+                $photoPreview.attr('src', base64).prop('hidden', false);
+                removingPhoto = false;
+                hasExistingPhoto = false;
+                updatePhotoControls();
+            });
+        });
+
+        $providers.on('click', '#remove-photo', () => {
+            const hadExistingPhoto = hasExistingPhoto;
+
+            $photo.val('');
+            $photoPreview.attr('src', '#').prop('hidden', true);
+            removingPhoto = hadExistingPhoto;
+            hasExistingPhoto = false;
+            updatePhotoControls();
+        });
     }
 
     /**
@@ -236,8 +286,8 @@ App.Pages.Providers = (function () {
      * @param {Object} provider Contains the provider record data. If an 'id' value is provided
      * then the update operation is going to be executed.
      */
-    function save(provider) {
-        App.Http.Providers.save(provider).then((response) => {
+    function save(formData, providerId = null) {
+        App.Http.Providers.save(formData, providerId).then((response) => {
             App.Layouts.Backend.displayNotification(lang('provider_saved'));
             App.Pages.Providers.resetForm();
             $('#filter-providers .key').val('');
@@ -328,6 +378,13 @@ App.Pages.Providers = (function () {
         }
     }
 
+    function updatePhotoControls() {
+        const hasPreview = !$photoPreview.prop('hidden');
+        const controlsEnabled = !$photo.prop('disabled');
+
+        $removePhoto.prop('hidden', !(hasPreview && controlsEnabled));
+    }
+
     /**
      * Resets the provider tab form back to its initial state.
      */
@@ -364,6 +421,12 @@ App.Pages.Providers = (function () {
         $('#providers .working-plan tbody').empty();
         $('#providers .breaks tbody').empty();
         $('#providers .working-plan-exceptions tbody').empty();
+
+        $photo.val('');
+        $photoPreview.attr('src', '#').prop('hidden', true);
+        removingPhoto = false;
+        hasExistingPhoto = false;
+        updatePhotoControls();
     }
 
     /**
@@ -387,6 +450,19 @@ App.Pages.Providers = (function () {
         $language.val(provider.language);
         $timezone.val(provider.timezone);
         $ldapDn.val(provider.ldap_dn);
+
+        const photoUrl = provider.photo ? App.Utils.Url.baseUrl(provider.photo) : null;
+
+        if (photoUrl) {
+            $photoPreview.attr('src', photoUrl).prop('hidden', false);
+            hasExistingPhoto = true;
+        } else {
+            $photoPreview.attr('src', '#').prop('hidden', true);
+            hasExistingPhoto = false;
+        }
+
+        removingPhoto = false;
+        updatePhotoControls();
 
         $username.val(provider.settings.username);
         $calendarView.val(provider.settings.calendar_view);
@@ -506,29 +582,61 @@ App.Pages.Providers = (function () {
      * @return {String} The html code that represents the record on the filter results list.
      */
     function getFilterHtml(provider) {
-        const name = provider.first_name + ' ' + provider.last_name;
+        const name = `${provider.first_name} ${provider.last_name}`.trim();
+        const infoParts = [];
 
-        let info = provider.email;
+        if (provider.email) {
+            infoParts.push(provider.email);
+        }
 
-        info = provider.mobile_number ? info + ', ' + provider.mobile_number : info;
+        if (provider.mobile_number) {
+            infoParts.push(provider.mobile_number);
+        }
 
-        info = provider.phone_number ? info + ', ' + provider.phone_number : info;
+        if (provider.phone_number) {
+            infoParts.push(provider.phone_number);
+        }
 
-        return $('<div/>', {
-            'class': 'provider-row entry',
+        const info = infoParts.join(', ');
+
+        const $wrapper = $('<div/>', {
+            'class': 'provider-row entry d-flex align-items-center',
             'data-id': provider.id,
-            'html': [
-                $('<strong/>', {
-                    'text': name,
-                }),
-                $('<br/>'),
-                $('<small/>', {
-                    'class': 'text-muted',
-                    'text': info,
-                }),
-                $('<br/>'),
-            ],
         });
+
+        if (provider.photo) {
+            $('<img/>', {
+                'class': 'rounded-circle border me-3',
+                'src': App.Utils.Url.baseUrl(provider.photo),
+                'alt': name,
+                'css': {
+                    'width': '40px',
+                    'height': '40px',
+                    'object-fit': 'cover',
+                },
+            }).appendTo($wrapper);
+        }
+
+        const $textContainer = $('<div/>', {
+            'class': 'flex-grow-1',
+        }).appendTo($wrapper);
+
+        $('<strong/>', {
+            'text': name,
+        }).appendTo($textContainer);
+
+        $('<br/>').appendTo($textContainer);
+
+        if (info) {
+            $('<small/>', {
+                'class': 'text-muted',
+                'text': info,
+            }).appendTo($textContainer);
+        }
+
+        $('<br/>').appendTo($textContainer);
+
+        return $wrapper;
     }
 
     /**

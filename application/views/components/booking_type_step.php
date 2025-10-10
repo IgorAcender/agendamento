@@ -90,6 +90,12 @@
                     </select>
                 </div>
 
+                <div id="provider-photo" class="text-center" hidden>
+                    <img id="provider-photo-image" src="#" alt="<?= lang('provider') ?>"
+                         class="img-thumbnail"
+                         style="max-width: 160px; max-height: 160px; object-fit: cover;">
+                </div>
+
                 <div id="service-description" class="small">
                     <!-- JS -->
                 </div>
