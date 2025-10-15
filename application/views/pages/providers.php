@@ -85,6 +85,31 @@
                     <div class="row">
                         <div class="details col-12 col-lg-6">
                             <div class="mb-3">
+                                <label class="form-label d-block" for="photo">
+                                    <?= lang('provider_photo') ?>
+                                </label>
+
+                                <div class="d-flex align-items-center">
+                                    <img id="photo-preview" class="rounded-circle border me-3" src="#"
+                                         alt="<?= lang('provider') ?>"
+                                         style="width:80px;height:80px;object-fit:cover;" hidden>
+
+                                    <div class="flex-grow-1">
+                                        <input type="file" id="photo" class="form-control" accept="image/*" disabled>
+
+                                        <div class="form-text">
+                                            <?= lang('provider_photo_hint') ?>
+                                        </div>
+
+                                        <button type="button" id="remove-photo"
+                                                class="btn btn-link text-danger px-0 mt-2" hidden>
+                                            <?= lang('remove') ?>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
                                 <label class="form-label" for="first-name">
                                     <?= lang('first_name') ?>
                                     <span class="text-danger" hidden>*</span>

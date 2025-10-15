@@ -22,8 +22,8 @@ App.Http.Providers = (function () {
      *
      * @return {Object}
      */
-    function save(provider) {
-        return provider.id ? update(provider) : store(provider);
+    function save(formData, providerId = null) {
+        return providerId ? update(formData) : store(formData);
     }
 
     /**
@@ -33,15 +33,17 @@ App.Http.Providers = (function () {
      *
      * @return {Object}
      */
-    function store(provider) {
+    function store(formData) {
         const url = App.Utils.Url.siteUrl('providers/store');
 
-        const data = {
-            csrf_token: vars('csrf_token'),
-            provider: provider,
-        };
-
-        return $.post(url, data);
+        return $.ajax({
+            url,
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+        });
     }
 
     /**
@@ -51,15 +53,17 @@ App.Http.Providers = (function () {
      *
      * @return {Object}
      */
-    function update(provider) {
+    function update(formData) {
         const url = App.Utils.Url.siteUrl('providers/update');
 
-        const data = {
-            csrf_token: vars('csrf_token'),
-            provider: provider,
-        };
-
-        return $.post(url, data);
+        return $.ajax({
+            url,
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+        });
     }
 
     /**

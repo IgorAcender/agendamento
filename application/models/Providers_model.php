@@ -48,6 +48,7 @@ class Providers_model extends EA_Model
         'notes' => 'notes',
         'isPrivate' => 'is_private',
         'ldapDn' => 'ldap_dn',
+        'photo' => 'photo',
         'roleId' => 'id_roles',
     ];
 
