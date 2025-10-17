@@ -37,6 +37,8 @@ App.Pages.Providers = (function () {
     const $notifications = $('#notifications');
     const $calendarView = $('#calendar-view');
     const $filterProviders = $('#filter-providers');
+    const $photo = $('#photo');
+    const $photoPreview = $('#provider-photo-preview');
     let filterResults = {};
     let filterLimit = 20;
     let workingPlanManager;
@@ -47,10 +49,6 @@ App.Pages.Providers = (function () {
     function addEventListeners() {
         /**
          * Event: Filter Providers Form "Submit"
-         *
-         * Filter the provider records with the given key string.
-         *
-         * @param {jQuery.Event} event
          */
         $providers.on('submit', '#filter-providers form', (event) => {
             event.preventDefault();
@@ -62,13 +60,11 @@ App.Pages.Providers = (function () {
 
         /**
          * Event: Filter Provider Row "Click"
-         *
-         * Display the selected provider data to the user.
          */
         $providers.on('click', '.provider-row', (event) => {
             if ($filterProviders.find('.filter').prop('disabled')) {
                 $filterProviders.find('.results').css('color', '#AAA');
-                return; // Exit because we are currently on edit mode.
+                return;
             }
 
             const providerId = $(event.currentTarget).attr('data-id');
@@ -99,6 +95,10 @@ App.Pages.Providers = (function () {
                 .prop('disabled', false);
             $('#provider-services input:checkbox').prop('disabled', false);
 
+            // Habilita o campo de foto
+            $photo.prop('disabled', false);
+            $photoPreview.empty();
+
             // Apply default working plan
             const companyWorkingPlan = JSON.parse(vars('company_working_plan'));
             workingPlanManager.setup(companyWorkingPlan);
@@ -124,6 +124,9 @@ App.Pages.Providers = (function () {
                 .prop('disabled', false);
             $('#providers input:checkbox').prop('disabled', false);
             workingPlanManager.timepickers(false);
+
+            // Habilita o campo de foto
+            $photo.prop('disabled', false);
         });
 
         /**
@@ -201,13 +204,40 @@ App.Pages.Providers = (function () {
                 return;
             }
 
-            App.Pages.Providers.save(provider);
+            // NOVO: Enviar como FormData para incluir a foto
+            const formData = new FormData();
+            Object.keys(provider).forEach(key => {
+                if (typeof provider[key] === 'object') {
+                    formData.append(key, JSON.stringify(provider[key]));
+                } else {
+                    formData.append(key, provider[key]);
+                }
+            });
+
+            // Adiciona a foto, se selecionada
+            const photoFile = $photo[0].files[0];
+            if (photoFile) {
+                formData.append('photo', photoFile);
+            }
+
+            // Envia via AJAX
+            $.ajax({
+                url: App.Http.Providers.getSaveUrl ? App.Http.Providers.getSaveUrl() : '', // ajuste se necessário
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    App.Layouts.Backend.displayNotification(lang('provider_saved'));
+                    App.Pages.Providers.resetForm();
+                    $('#filter-providers .key').val('');
+                    App.Pages.Providers.filter('', response.id, true);
+                }
+            });
         });
 
         /**
          * Event: Cancel Provider Button "Click"
-         *
-         * Cancel add or edit of an provider record.
          */
         $providers.on('click', '#cancel-provider', () => {
             const id = $('#filter-providers .selected').attr('data-id');
@@ -228,6 +258,20 @@ App.Pages.Providers = (function () {
             workingPlanManager.setup(companyWorkingPlan);
             workingPlanManager.timepickers(false);
         });
+
+        // Preview da foto ao selecionar arquivo
+        $photo.on('change', function () {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    $photoPreview.html('<img src="' + e.target.result + '" style="width:80px; border-radius:50%;">');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                $photoPreview.empty();
+            }
+        });
     }
 
     /**
@@ -237,12 +281,7 @@ App.Pages.Providers = (function () {
      * then the update operation is going to be executed.
      */
     function save(provider) {
-        App.Http.Providers.save(provider).then((response) => {
-            App.Layouts.Backend.displayNotification(lang('provider_saved'));
-            App.Pages.Providers.resetForm();
-            $('#filter-providers .key').val('');
-            App.Pages.Providers.filter('', response.id, true);
-        });
+        // Não usado mais, pois o envio é feito via FormData no evento do botão salvar
     }
 
     /**
@@ -364,6 +403,10 @@ App.Pages.Providers = (function () {
         $('#providers .working-plan tbody').empty();
         $('#providers .breaks tbody').empty();
         $('#providers .working-plan-exceptions tbody').empty();
+
+        // Limpa campo de foto e preview
+        $photo.val('').prop('disabled', true);
+        $photoPreview.empty();
     }
 
     /**
@@ -391,6 +434,13 @@ App.Pages.Providers = (function () {
         $username.val(provider.settings.username);
         $calendarView.val(provider.settings.calendar_view);
         $notifications.prop('checked', Boolean(Number(provider.settings.notifications)));
+
+        // Exibe a foto atual, se houver
+        if (provider.photo_url) {
+            $photoPreview.html('<img src="' + provider.photo_url + '" style="width:80px; border-radius:50%;">');
+        } else {
+            $photoPreview.empty();
+        }
 
         // Add dedicated provider link.
         let dedicatedUrl = App.Utils.Url.siteUrl('?provider=' + encodeURIComponent(provider.id));

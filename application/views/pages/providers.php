@@ -101,6 +101,14 @@
                             </div>
 
                             <div class="mb-3">
+                                <label class="form-label" for="photo">
+                                    <?= lang('photo') ?>
+                                </label>
+                                <input type="file" id="photo" class="form-control" accept="image/*" disabled>
+                                <div id="provider-photo-preview" class="mt-2"></div>
+                            </div>
+
+                            <div class="mb-3">
                                 <label class="form-label" for="email">
                                     <?= lang('email') ?>
                                     <span class="text-danger" hidden>*</span>

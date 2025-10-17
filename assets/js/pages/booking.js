@@ -42,28 +42,29 @@ App.Pages.Booking = (function () {
     const tippy = window.tippy;
     const moment = window.moment;
 
-    /**
-     * Determines the functionality of the page.
-     *
-     * @type {Boolean}
-     */
     let manageMode = vars('manage_mode') || false;
 
-    /**
-     * Detect the month step.
-     *
-     * @param previousDateTimeMoment
-     * @param nextDateTimeMoment
-     *
-     * @returns {Number}
-     */
     function detectDatepickerMonthChangeStep(previousDateTimeMoment, nextDateTimeMoment) {
         return previousDateTimeMoment.isAfter(nextDateTimeMoment) ? -1 : 1;
     }
 
-    /**
-     * Initialize the module.
-     */
+    // NOVO: Exibir foto do profissional ao lado do select
+    function updateProviderPhoto() {
+        const selectedOption = $selectProvider.find('option:selected');
+        const providerId = selectedOption.val();
+        const provider = vars('available_providers').find(p => String(p.id) === String(providerId));
+        let $photo = $('#provider-photo');
+        if (!$photo.length) {
+            $photo = $('<img id="provider-photo" class="professional-photo" style="display:none;"/>');
+            $selectProvider.before($photo);
+        }
+        if (provider && provider.photo_url) {
+            $photo.attr('src', provider.photo_url).show();
+        } else {
+            $photo.hide();
+        }
+    }
+
     function initialize() {
         if (Boolean(Number(vars('display_cookie_notice'))) && window?.cookieconsent) {
             cookieconsent.initialise({
@@ -98,7 +99,6 @@ App.Pages.Booking = (function () {
 
         manageMode = vars('manage_mode');
 
-        // Initialize page's components (tooltips, date pickers etc).
         tippy('[data-tippy-content]');
 
         let monthTimeout;
@@ -113,7 +113,7 @@ App.Pages.Booking = (function () {
             },
 
             onMonthChange: (selectedDates, dateStr, instance) => {
-                $selectDate.parent().fadeTo(400, 0.3); // Change opacity during loading
+                $selectDate.parent().fadeTo(400, 0.3);
 
                 if (monthTimeout) {
                     clearTimeout(monthTimeout);
@@ -121,14 +121,12 @@ App.Pages.Booking = (function () {
 
                 monthTimeout = setTimeout(() => {
                     const previousMoment = moment(instance.selectedDates[0]);
-
                     const displayedMonthMoment = moment(
                         instance.currentYearElement.value +
                             '-' +
                             String(Number(instance.monthsDropdownContainer.value) + 1).padStart(2, '0') +
                             '-01',
                     );
-
                     const monthChangeStep = detectDatepickerMonthChangeStep(previousMoment, displayedMonthMoment);
 
                     App.Http.Booking.getUnavailableDates(
@@ -143,14 +141,12 @@ App.Pages.Booking = (function () {
             onYearChange: (selectedDates, dateStr, instance) => {
                 setTimeout(() => {
                     const previousMoment = moment(instance.selectedDates[0]);
-
                     const displayedMonthMoment = moment(
                         instance.currentYearElement.value +
                             '-' +
                             String(Number(instance.monthsDropdownContainer.value) + 1).padStart(2, '0') +
                             '-01',
                     );
-
                     const monthChangeStep = detectDatepickerMonthChangeStep(previousMoment, displayedMonthMoment);
 
                     App.Http.Booking.getUnavailableDates(
@@ -169,20 +165,22 @@ App.Pages.Booking = (function () {
         const isTimezoneSupported = $selectTimezone.find(`option[value="${browserTimezone}"]`).length > 0;
         $selectTimezone.val(isTimezoneSupported ? browserTimezone : 'UTC');
 
-        // Bind the event handlers (might not be necessary every time we use this class).
         addEventListeners();
 
         optimizeContactInfoDisplay();
 
-        const serviceOptionCount = $selectService.find('option').length;
+        // NOVO: Preencher profissionais ao iniciar
+        fillProviders();
 
-        if (serviceOptionCount === 2) {
-            $selectService.find('option[value=""]').remove();
-            const firstServiceId = $selectService.find('option:first').attr('value');
-            $selectService.val(firstServiceId).trigger('change');
+        // NOVO: Se só houver um profissional, já seleciona
+        const providerOptionCount = $selectProvider.find('option').length;
+        if (providerOptionCount === 2) {
+            $selectProvider.find('option[value=""]').remove();
+            const firstProviderId = $selectProvider.find('option:first').attr('value');
+            $selectProvider.val(firstProviderId).trigger('change');
         }
 
-        // If the manage mode is true, the appointment data should be loaded by default.
+        // Se manage mode, carrega dados
         if (manageMode) {
             applyAppointmentData(vars('appointment_data'), vars('provider_data'), vars('customer_data'));
 
@@ -193,70 +191,15 @@ App.Pages.Booking = (function () {
                 })
                 .fadeIn();
         } else {
-            // Check if a specific service was selected (via URL parameter).
-            const selectedServiceId = App.Utils.Url.queryParam('service');
-
-            if (selectedServiceId && $selectService.find('option[value="' + selectedServiceId + '"]').length > 0) {
-                $selectService.val(selectedServiceId);
-            }
-
-            $selectService.trigger('change'); // Load the available hours.
-
-            // Check if a specific provider was selected.
+            // Parâmetros via URL
             const selectedProviderId = App.Utils.Url.queryParam('provider');
-
-            if (selectedProviderId && $selectProvider.find('option[value="' + selectedProviderId + '"]').length === 0) {
-                // Select a service of this provider in order to make the provider available in the select box.
-                for (const index in vars('available_providers')) {
-                    const provider = vars('available_providers')[index];
-
-                    if (Number(provider.id) === Number(selectedProviderId) && provider.services.length > 0) {
-                        $selectService.val(provider.services[0]).trigger('change');
-                    }
-                }
-            }
-
             if (selectedProviderId && $selectProvider.find('option[value="' + selectedProviderId + '"]').length > 0) {
                 $selectProvider.val(selectedProviderId).trigger('change');
             }
 
-            if (
-                (selectedServiceId && selectedProviderId) ||
-                (vars('available_services').length === 1 && vars('available_providers').length === 1)
-            ) {
-                if (!selectedServiceId) {
-                    $selectService.val(vars('available_services')[0].id).trigger('change');
-                }
-
-                if (!selectedProviderId) {
-                    $selectProvider.val(vars('available_providers')[0].id).trigger('change');
-                }
-
-                $('.active-step').removeClass('active-step');
-                $('#step-2').addClass('active-step');
-                $('#wizard-frame-1').hide();
-                $('#wizard-frame-2').fadeIn();
-
-                $selectService.closest('.wizard-frame').find('.button-next').trigger('click');
-
-                $(document).find('.book-step:first').hide();
-
-                $(document).find('.button-back:first').css('visibility', 'hidden');
-
-                $(document)
-                    .find('.book-step:not(:first)')
-                    .each((index, bookStepEl) =>
-                        $(bookStepEl)
-                            .find('strong')
-                            .text(index + 1),
-                    );
-            } else {
-                $('#wizard-frame-1')
-                    .css({
-                        'visibility': 'visible',
-                        'display': 'none',
-                    })
-                    .fadeIn();
+            const selectedServiceId = App.Utils.Url.queryParam('service');
+            if (selectedServiceId && $selectService.find('option[value="' + selectedServiceId + '"]').length > 0) {
+                $selectService.val(selectedServiceId);
             }
 
             prefillFromQueryParam('#first-name', 'first_name');
@@ -269,22 +212,52 @@ App.Pages.Booking = (function () {
         }
     }
 
+    // NOVO: Preencher profissionais
+    function fillProviders() {
+        $selectProvider.empty();
+        $selectProvider.append(new Option(lang('please_select'), ''));
+        vars('available_providers').forEach((provider) => {
+            $selectProvider.append(
+                new Option(
+                    (provider.first_name + ' ' + provider.last_name).trim(),
+                    provider.id
+                )
+            );
+        });
+    }
+
+    // NOVO: Preencher serviços do profissional selecionado
+    function fillServicesByProvider(providerId) {
+        $selectService.empty();
+        $selectService.append(new Option(lang('please_select'), ''));
+        if (!providerId) {
+            $selectService.prop('disabled', true);
+            return;
+        }
+        const provider = vars('available_providers').find(p => String(p.id) === String(providerId));
+        if (!provider || !provider.services || !provider.services.length) {
+            $selectService.prop('disabled', true);
+            return;
+        }
+        vars('available_services').forEach((service) => {
+            if (provider.services.includes(String(service.id)) || provider.services.includes(Number(service.id))) {
+                $selectService.append(
+                    new Option(service.name, service.id)
+                );
+            }
+        });
+        $selectService.prop('disabled', false);
+    }
+
     function prefillFromQueryParam(field, param) {
         const $target = $(field);
-
         if (!$target.length) {
             return;
         }
-
         $target.val(App.Utils.Url.queryParam(param));
     }
 
-    /**
-     * Remove empty columns and center elements if needed.
-     */
     function optimizeContactInfoDisplay() {
-        // If a column has only one control shown then move the control to the other column.
-
         const $firstCol = $('#wizard-frame-3 .field-col:first');
         const $firstColControls = $firstCol.find('.form-control');
         const $secondCol = $('#wizard-frame-3 .field-col:last');
@@ -302,53 +275,38 @@ App.Pages.Booking = (function () {
             });
         }
 
-        // Hide columns that do not have any controls displayed.
-
         const $fieldCols = $(document).find('#wizard-frame-3 .field-col');
-
         $fieldCols.each((index, fieldColEl) => {
             const $fieldCol = $(fieldColEl);
-
             if (!$fieldCol.find('.form-control').length) {
                 $fieldCol.hide();
             }
         });
     }
 
-    /**
-     * Add the page event listeners.
-     */
     function addEventListeners() {
-        /**
-         * Event: Timezone "Changed"
-         */
         $selectTimezone.on('change', () => {
             const date = App.Utils.UI.getDateTimePickerValue($selectDate);
-
             if (!date) {
                 return;
             }
-
             App.Http.Booking.getAvailableHours(moment(date).format('YYYY-MM-DD'));
-
             App.Pages.Booking.updateConfirmFrame();
         });
 
-        /**
-         * Event: Selected Provider "Changed"
-         *
-         * Whenever the provider changes the available appointment date - time periods must be updated.
-         */
-        $selectProvider.on('change', (event) => {
-            const $target = $(event.target);
+        // NOVO: Ao selecionar profissional, preenche serviços e mostra foto
+        $selectProvider.on('change', function () {
+            const providerId = $(this).val();
+            fillServicesByProvider(providerId);
+            updateProviderPhoto();
 
+            // Atualiza datas indisponíveis
             const todayDateTimeObject = new Date();
             const todayDateTimeMoment = moment(todayDateTimeObject);
-
             App.Utils.UI.setDateTimePickerValue($selectDate, todayDateTimeObject);
 
             App.Http.Booking.getUnavailableDates(
-                $target.val(),
+                providerId,
                 $selectService.val(),
                 todayDateTimeMoment.format('YYYY-MM-DD'),
             );
@@ -356,72 +314,26 @@ App.Pages.Booking = (function () {
             App.Pages.Booking.updateConfirmFrame();
         });
 
-        /**
-         * Event: Selected Service "Changed"
-         *
-         * When the user clicks on a service, its available providers should
-         * become visible.
-         */
-        $selectService.on('change', (event) => {
-            const $target = $(event.target);
+        // Ao selecionar serviço, atualiza datas indisponíveis e descrição
+        $selectService.on('change', function () {
             const serviceId = $selectService.val();
-            $selectProvider.parent().prop('hidden', !Boolean(serviceId));
-
-            $selectProvider.empty();
-
-            $selectProvider.append(new Option(lang('please_select'), ''));
-
-            vars('available_providers').forEach((provider) => {
-                // If the current provider is able to provide the selected service, add him to the list box.
-                const canServeService =
-                    provider.services.filter((providerServiceId) => Number(providerServiceId) === Number(serviceId))
-                        .length > 0;
-
-                if (canServeService) {
-                    $selectProvider.append(new Option(provider.first_name + ' ' + provider.last_name, provider.id));
-                }
-            });
-
-            const providerOptionCount = $selectProvider.find('option').length;
-
-            // Remove the "Please Select" option, if there is only one provider available
-
-            if (providerOptionCount === 2) {
-                $selectProvider.find('option[value=""]').remove();
-            }
-
-            // Add the "Any Provider" entry
-
-            if (providerOptionCount > 2 && Boolean(Number(vars('display_any_provider')))) {
-                $(new Option(lang('any_provider'), 'any-provider')).insertAfter($selectProvider.find('option:first'));
-            }
-
             App.Http.Booking.getUnavailableDates(
                 $selectProvider.val(),
-                $target.val(),
+                serviceId,
                 moment(App.Utils.UI.getDateTimePickerValue($selectDate)).format('YYYY-MM-DD'),
             );
-
             App.Pages.Booking.updateConfirmFrame();
-
             App.Pages.Booking.updateServiceDescription(serviceId);
         });
 
-        /**
-         * Event: Next Step Button "Clicked"
-         *
-         * This handler is triggered every time the user pressed the "next" button on the book wizard.
-         * Some special tasks might be performed, depending on the current wizard step.
-         */
         $('.button-next').on('click', (event) => {
             const $target = $(event.currentTarget);
 
-            // If we are on the first step and there is no provider selected do not continue with the next step.
+            // Agora, exige profissional antes de avançar
             if ($target.attr('data-step_index') === '1' && !$selectProvider.val()) {
                 return;
             }
 
-            // If we are on the 2nd tab then the user should have an appointment hour selected.
             if ($target.attr('data-step_index') === '2') {
                 if (!$('.selected-hour').length) {
                     if (!$('#select-hour-prompt').length) {
@@ -435,17 +347,14 @@ App.Pages.Booking = (function () {
                 }
             }
 
-            // If we are on the 3rd tab then we will need to validate the user's input before proceeding to the next
-            // step.
             if ($target.attr('data-step_index') === '3') {
                 if (!App.Pages.Booking.validateCustomerForm()) {
-                    return; // Validation failed, do not continue.
+                    return;
                 } else {
                     App.Pages.Booking.updateConfirmFrame();
                 }
             }
 
-            // Display the next step tab (uses jquery animation effect).
             const nextTabIndex = parseInt($target.attr('data-step_index')) + 1;
 
             $target
@@ -457,19 +366,12 @@ App.Pages.Booking = (function () {
                     $('#wizard-frame-' + nextTabIndex).fadeIn();
                 });
 
-            // Scroll to the top of the page. On a small screen, especially on a mobile device, this is very useful.
             const scrollingElement = document.scrollingElement || document.body;
             if (window.innerHeight < scrollingElement.scrollHeight) {
                 scrollingElement.scrollTop = 0;
             }
         });
 
-        /**
-         * Event: Back Step Button "Clicked"
-         *
-         * This handler is triggered every time the user pressed the "back" button on the
-         * book wizard.
-         */
         $('.button-back').on('click', (event) => {
             const prevTabIndex = parseInt($(event.currentTarget).attr('data-step_index')) - 1;
 
@@ -483,11 +385,6 @@ App.Pages.Booking = (function () {
                 });
         });
 
-        /**
-         * Event: Available Hour "Click"
-         *
-         * Triggered whenever the user clicks on an available hour for his appointment.
-         */
         $availableHours.on('click', '.available-hour', (event) => {
             $availableHours.find('.selected-hour').removeClass('selected-hour');
             $(event.target).addClass('selected-hour');
@@ -495,20 +392,9 @@ App.Pages.Booking = (function () {
         });
 
         if (manageMode) {
-            /**
-             * Event: Cancel Appointment Button "Click"
-             *
-             * When the user clicks the "Cancel" button this form is going to be submitted. We need
-             * the user to confirm this action because once the appointment is cancelled, it will be
-             * deleted from the database.
-             *
-             * @param {jQuery.Event} event
-             */
             $('#cancel-appointment').on('click', () => {
                 const $cancelAppointmentForm = $('#cancel-appointment-form');
-
                 let $cancellationReason;
-
                 const buttons = [
                     {
                         text: lang('close'),
@@ -571,39 +457,22 @@ App.Pages.Booking = (function () {
             });
         }
 
-        /**
-         * Event: Book Appointment Form "Submit"
-         *
-         * Before the form is submitted to the server we need to make sure that in the meantime the selected appointment
-         * date/time wasn't reserved by another customer or event.
-         *
-         * @param {jQuery.Event} event
-         */
         $bookAppointmentSubmit.on('click', () => {
             const $acceptToTermsAndConditions = $('#accept-to-terms-and-conditions');
-
             $acceptToTermsAndConditions.removeClass('is-invalid');
-
             if ($acceptToTermsAndConditions.length && !$acceptToTermsAndConditions.prop('checked')) {
                 $acceptToTermsAndConditions.addClass('is-invalid');
                 return;
             }
-
             const $acceptToPrivacyPolicy = $('#accept-to-privacy-policy');
-
             $acceptToPrivacyPolicy.removeClass('is-invalid');
-
             if ($acceptToPrivacyPolicy.length && !$acceptToPrivacyPolicy.prop('checked')) {
                 $acceptToPrivacyPolicy.addClass('is-invalid');
                 return;
             }
-
             App.Http.Booking.registerAppointment();
         });
 
-        /**
-         * Event: Refresh captcha image.
-         */
         $captchaTitle.on('click', 'button', () => {
             $('.captcha-image').attr('src', App.Utils.Url.siteUrl('captcha?' + Date.now()));
         });
@@ -615,17 +484,10 @@ App.Pages.Booking = (function () {
         });
     }
 
-    /**
-     * This function validates the customer's data input. The user cannot continue without passing all the validation
-     * checks.
-     *
-     * @return {Boolean} Returns the validation result.
-     */
     function validateCustomerForm() {
         $('#wizard-frame-3 .is-invalid').removeClass('is-invalid');
         $('#wizard-frame-3 label.text-danger').removeClass('text-danger');
 
-        // Validate required fields.
         let missingRequiredField = false;
 
         $('.required').each((index, requiredField) => {
@@ -640,16 +502,13 @@ App.Pages.Booking = (function () {
             return false;
         }
 
-        // Validate email address.
         if ($email.val() && !App.Utils.Validation.email($email.val())) {
             $email.addClass('is-invalid');
             $('#form-message').text(lang('invalid_email'));
             return false;
         }
 
-        // Validate phone number.
         const phoneNumber = $phoneNumber.val();
-
         if (phoneNumber && !App.Utils.Validation.phone(phoneNumber)) {
             $phoneNumber.addClass('is-invalid');
             $('#form-message').text(lang('invalid_phone'));
@@ -659,35 +518,29 @@ App.Pages.Booking = (function () {
         return true;
     }
 
-    /**
-     * Every time this function is executed, it updates the confirmation page with the latest
-     * customer settings and input for the appointment booking.
-     */
     function updateConfirmFrame() {
         const serviceId = $selectService.val();
         const providerId = $selectProvider.val();
 
-        $displayBookingSelection.text(`${lang('service')} │ ${lang('provider')}`); // Notice: "│" is a custom ASCII char
+        $displayBookingSelection.text(`${lang('provider')} │ ${lang('service')}`);
 
         const serviceOptionText = serviceId ? $selectService.find('option:selected').text() : lang('service');
         const providerOptionText = providerId ? $selectProvider.find('option:selected').text() : lang('provider');
 
         if (serviceId || providerId) {
-            $displayBookingSelection.text(`${serviceOptionText} │ ${providerOptionText}`);
+            $displayBookingSelection.text(`${providerOptionText} │ ${serviceOptionText}`);
         }
 
         if (!$availableHours.find('.selected-hour').text()) {
-            return; // No time is selected, skip the rest of this function...
+            return;
         }
-
-        // Render the appointment details
 
         const service = vars('available_services').find(
             (availableService) => Number(availableService.id) === Number(serviceId),
         );
 
         if (!service) {
-            return; // Service was not found
+            return;
         }
 
         const selectedDateObject = App.Utils.UI.getDateTimePickerValue($selectDate);
@@ -733,8 +586,6 @@ App.Pages.Booking = (function () {
             </div>     
         `);
 
-        // Render the customer information
-
         const firstName = App.Utils.String.escapeHtml($firstName.val());
         const lastName = App.Utils.String.escapeHtml($lastName.val());
         const fullName = `${firstName} ${lastName}`.trim();
@@ -777,8 +628,6 @@ App.Pages.Booking = (function () {
             </div>
         `);
 
-        // Update appointment form data for submission to server when the user confirms the appointment.
-
         const data = {};
 
         data.customer = {
@@ -820,26 +669,15 @@ App.Pages.Booking = (function () {
         $('input[name="post_data"]').val(JSON.stringify(data));
     }
 
-    /**
-     * This method calculates the end datetime of the current appointment.
-     *
-     * End datetime is depending on the service and start datetime fields.
-     *
-     * @return {String} Returns the end datetime in string format.
-     */
     function calculateEndDatetime() {
-        // Find selected service duration.
         const serviceId = $selectService.val();
 
         const service = vars('available_services').find(
             (availableService) => Number(availableService.id) === Number(serviceId),
         );
 
-        // Add the duration to the start datetime.
         const selectedDate = moment(App.Utils.UI.getDateTimePickerValue($selectDate)).format('YYYY-MM-DD');
-
-        const selectedHour = $('.selected-hour').data('value'); // HH:mm
-
+        const selectedHour = $('.selected-hour').data('value');
         const startMoment = moment(selectedDate + ' ' + selectedHour);
 
         let endMoment;
@@ -853,28 +691,14 @@ App.Pages.Booking = (function () {
         return endMoment.format('YYYY-MM-DD HH:mm:ss');
     }
 
-    /**
-     * This method applies the appointment's data to the wizard so
-     * that the user can start making changes on an existing record.
-     *
-     * @param {Object} appointment Selected appointment's data.
-     * @param {Object} provider Selected provider's data.
-     * @param {Object} customer Selected customer's data.
-     *
-     * @return {Boolean} Returns the operation result.
-     */
     function applyAppointmentData(appointment, provider, customer) {
         try {
-            // Select Service & Provider
-            $selectService.val(appointment.id_services).trigger('change');
-            $selectProvider.val(appointment.id_users_provider);
+            $selectProvider.val(appointment.id_users_provider).trigger('change');
+            $selectService.val(appointment.id_services);
 
-            // Set Appointment Date
             const startMoment = moment(appointment.start_datetime);
             App.Utils.UI.setDateTimePickerValue($selectDate, startMoment.toDate());
             App.Http.Booking.getAvailableHours(startMoment.format('YYYY-MM-DD'));
-
-            // Update unavailable dates while in manage mode
 
             App.Http.Booking.getUnavailableDates(
                 appointment.id_users_provider,
@@ -882,7 +706,6 @@ App.Pages.Booking = (function () {
                 startMoment.format('YYYY-MM-DD'),
             );
 
-            // Apply Customer's Data
             $lastName.val(customer.last_name);
             $firstName.val(customer.first_name);
             $email.val(customer.email);
@@ -910,18 +733,8 @@ App.Pages.Booking = (function () {
         }
     }
 
-    /**
-     * Update the service description and information.
-     *
-     * This method updates the HTML content with a brief description of the
-     * user selected service (only if available in db). This is useful for the
-     * customers upon selecting the correct service.
-     *
-     * @param {Number} serviceId The selected service record id.
-     */
     function updateServiceDescription(serviceId) {
         const $serviceDescription = $('#service-description');
-
         $serviceDescription.empty();
 
         const service = vars('available_services').find(
@@ -929,10 +742,8 @@ App.Pages.Booking = (function () {
         );
 
         if (!service) {
-            return; // Service not found
+            return;
         }
-
-        // Render the additional service information
 
         const additionalInfoParts = [];
 
@@ -956,13 +767,9 @@ App.Pages.Booking = (function () {
             `).appendTo($serviceDescription);
         }
 
-        // Render the service description
-
         if (service.description?.length) {
             const escapedDescription = App.Utils.String.escapeHtml(service.description);
-
             const multiLineDescription = escapedDescription.replaceAll('\n', '<br/>');
-
             $(`
                 <div class="text-muted">
                     ${multiLineDescription}
